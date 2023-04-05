@@ -1,13 +1,11 @@
-# WASM Extension Prototype
+# Wasm Extension Prototype
 
-This project demonstrates using WASM extensions with Consul on Kubernetes.
+This project demonstrates using Wasm extensions with Consul on Kubernetes.
 
 ## Requirements
 - `kind`
 - `consul`
-  - Enterprise dev build for Envoy extensions
 - `consul-k8s`
-  - Local file support requires a custom `consul-k8s-control-plane` image so it can mount wasm plugins.
 
 ## Usage
 
@@ -75,7 +73,7 @@ kubectl create secret generic consul \
   --from-file=enterprise-license=${CONSUL_LICENSE_PATH}
 ```
 
-### Configure Volume for supplying the WASM plugin for the applications
+### Configure Volume for supplying the Wasm plugin for the applications
 
 ```shell
 kc apply -f pv/pv.yaml
@@ -112,9 +110,11 @@ consul catalog services
 ### Install the apps
 
 ```shell
+kubectl apply -f apps/fs.yaml
 kubectl apply -f apps/api.yaml
 kubectl apply -f apps/web.yaml
 kubectl apply -f apps/intentions.yaml
+consul config write apps/fs.hcl
 consul config write apps/api.hcl
 consul config write apps/web.hcl
 ```
@@ -130,10 +130,13 @@ export WEB_APP=$(kubectl get pods | grep 'web-' | awk '{print $1}')
 kubectl exec -it pod/$WEB_APP -c web -- ash
 
 # good actor
-curl 'http://api.default.svc.cluster.local/products?type=coffee'
+curl 'http://api.default.svc.cluster.local/'
 
-# bad actor - attempted SQL injection
-curl 'http://api.default.svc.cluster.local/products?type=coffee;%20--%20WHERE%201=1'
+# bad actor requests - will succeed
+# attempted SQL injection
+curl -v 'http://api.default.svc.cluster.local/' -d'1%27%20ORDER%20BY%203--%2B'
+# attempted JS injection
+curl -v 'http://api.default.svc.cluster.local/?arg=<script>alert(0)</script>'
 ```
 
 ### Add the Envoy extension to the `api` app
@@ -158,10 +161,19 @@ curl localhost:19000/config_dump
 kubectl exec -it pod/$WEB_APP -c web -- ash
 
 # good actor
-curl 'http://api.default.svc.cluster.local/products?type=coffee'
+curl 'http://api.default.svc.cluster.local/'
 
-# bad actor - attempted SQL injection
-curl 'http://api.default.svc.cluster.local/products?type=coffee;%20--%20WHERE%201=1'
+# bad actor requests - will be rejected by WAF with 403 Forbidden
+# attempted SQL injection
+curl -v 'http://api.default.svc.cluster.local/' -d'1%27%20ORDER%20BY%203--%2B'
+# attempted JS injection
+curl -v 'http://api.default.svc.cluster.local/?arg=<script>alert(0)</script>'
+```
+
+# Look at stats
+
+```shell
+curl -s localhost:19000/stats/prometheus | grep waf_filter
 ```
 
 ### Clean up

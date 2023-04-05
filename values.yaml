@@ -39,7 +39,9 @@ global:
     
 
   image: localhost:5000/consul-dev-ent
-  imageK8S: localhost:5000/consul-k8s-control-plane-dev
+
+  # Custom control plane image for local Wasm plugins.
+  # imageK8S: localhost:5000/consul-k8s-control-plane-dev
 
   enterpriseLicense:
     secretName: consul
